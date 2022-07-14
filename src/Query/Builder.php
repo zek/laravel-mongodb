@@ -609,7 +609,7 @@ class Builder extends BaseBuilder
     public function update(array $values, array $options = [])
     {
         // Use $set as default operator.
-        if (! Str::startsWith(key($values), '$')) {
+        if (! Str::startsWith(key($values), ['$', '0'])) {
             $values = ['$set' => $values];
         }
 
