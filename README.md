@@ -37,6 +37,7 @@ This package adds functionalities to the Eloquent model and Query builder for Mo
   - [Query Builder](#query-builder)
     - [Basic Usage](#basic-usage-2)
     - [Available operations](#available-operations)
+  - [Transactions](#transactions)
   - [Schema](#schema)
     - [Basic Usage](#basic-usage-3)
     - [Geospatial indexes](#geospatial-indexes)
@@ -143,7 +144,20 @@ Keep in mind that these traits are not yet supported:
 
 Configuration
 -------------
-You can use MongoDB either as the main database, either as a side database. To do so, add a new `mongodb` connection to `config/database.php`:
+
+To configure a new MongoDB connection, add a new connection entry to `config/database.php`:
+
+```php
+'mongodb' => [
+    'driver' => 'mongodb',
+    'dsn' => env('DB_DSN'),
+    'database' => env('DB_DATABASE', 'homestead'),
+],
+```
+
+The `dsn` key contains the connection string used to connect to your MongoDB deployment. The format and available options are documented in the [MongoDB documentation](https://docs.mongodb.com/manual/reference/connection-string/).
+
+Instead of using a connection string, you can also use the `host` and `port` configuration options to have the connection string created for you.
 
 ```php
 'mongodb' => [
@@ -154,36 +168,12 @@ You can use MongoDB either as the main database, either as a side database. To d
     'username' => env('DB_USERNAME', 'homestead'),
     'password' => env('DB_PASSWORD', 'secret'),
     'options' => [
-        // here you can pass more settings to the Mongo Driver Manager
-        // see https://www.php.net/manual/en/mongodb-driver-manager.construct.php under "Uri Options" for a list of complete parameters that you can use
-
-        'database' => env('DB_AUTHENTICATION_DATABASE', 'admin'), // required with Mongo 3+
+        'appname' => 'homestead',
     ],
 ],
 ```
 
-For multiple servers or replica set configurations, set the host to an array and specify each server host:
-
-```php
-'mongodb' => [
-    'driver' => 'mongodb',
-    'host' => ['server1', 'server2', ...],
-    ...
-    'options' => [
-        'replicaSet' => 'rs0',
-    ],
-],
-```
-
-If you wish to use a connection string instead of full key-value params, you can set it so. Check the documentation on MongoDB's URI format: https://docs.mongodb.com/manual/reference/connection-string/
-
-```php
-'mongodb' => [
-    'driver' => 'mongodb',
-    'dsn' => env('DB_DSN'),
-    'database' => env('DB_DATABASE', 'homestead'),
-],
-```
+The `options` key in the connection configuration corresponds to the [`uriOptions` parameter](https://www.php.net/manual/en/mongodb-driver-manager.construct.php#mongodb-driver-manager.construct-urioptions).
 
 Eloquent
 --------
@@ -223,7 +213,7 @@ class Book extends Model
     protected $primaryKey = 'id';
 }
 
-// Mongo will also create _id, but the 'id' property will be used for primary key actions like find().
+// MongoDB will also create _id, but the 'id' property will be used for primary key actions like find().
 Book::create(['id' => 1, 'title' => 'The Fault in Our Stars']);
 ```
 
@@ -238,7 +228,7 @@ class Book extends Model
 }
 ```
 
-### Extending the Authenticable base model
+### Extending the Authenticatable base model
 This package includes a MongoDB Authenticatable Eloquent class `Jenssegers\Mongodb\Auth\User` that you can use to replace the default Authenticatable class `Illuminate\Foundation\Auth\User` for your `User` model.
 
 ```php
@@ -978,6 +968,52 @@ If you are familiar with [Eloquent Queries](http://laravel.com/docs/queries), th
 
 ### Available operations
 To see the available operations, check the [Eloquent](#eloquent) section.
+
+Transactions
+------------
+Transactions require MongoDB version ^4.0 as well as deployment of replica set or sharded clusters. You can find more information [in the MongoDB docs](https://docs.mongodb.com/manual/core/transactions/)
+
+### Basic Usage
+
+```php
+DB::transaction(function () {
+    User::create(['name' => 'john', 'age' => 19, 'title' => 'admin', 'email' => 'john@example.com']);
+    DB::collection('users')->where('name', 'john')->update(['age' => 20]);
+    DB::collection('users')->where('name', 'john')->delete();
+});
+```
+
+```php
+// begin a transaction
+DB::beginTransaction();
+User::create(['name' => 'john', 'age' => 19, 'title' => 'admin', 'email' => 'john@example.com']);
+DB::collection('users')->where('name', 'john')->update(['age' => 20]);
+DB::collection('users')->where('name', 'john')->delete();
+
+// commit changes
+DB::commit();
+```
+
+To abort a transaction, call the `rollBack` method at any point during the transaction:
+```php
+DB::beginTransaction();
+User::create(['name' => 'john', 'age' => 19, 'title' => 'admin', 'email' => 'john@example.com']);
+
+// Abort the transaction, discarding any data created as part of it
+DB::rollBack();
+```
+
+**NOTE:** Transactions in MongoDB cannot be nested. DB::beginTransaction() function will start new transactions in a new created or existing session and will raise the RuntimeException when transactions already exist. See more in MongoDB official docs [Transactions and Sessions](https://www.mongodb.com/docs/manual/core/transactions/#transactions-and-sessions)
+```php
+DB::beginTransaction();
+User::create(['name' => 'john', 'age' => 20, 'title' => 'admin']);
+
+// This call to start a nested transaction will raise a RuntimeException
+DB::beginTransaction();
+DB::collection('users')->where('name', 'john')->update(['age' => 20]);
+DB::commit();
+DB::rollBack();
+```
 
 Schema
 ------

@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Str;
 use Jenssegers\Mongodb\Collection;
 use Jenssegers\Mongodb\Connection;
 use Jenssegers\Mongodb\Eloquent\Model;
@@ -678,6 +679,23 @@ class ModelTest extends TestCase
         $this->assertEquals('Strasbourg', $user['address.city']);
     }
 
+    public function testAttributeMutator(): void
+    {
+        $username = 'JaneDoe';
+        $usernameSlug = Str::slug($username);
+        $user = User::create([
+            'name' => 'Jane Doe',
+            'username' => $username,
+        ]);
+
+        $this->assertNotEquals($username, $user->getAttribute('username'));
+        $this->assertNotEquals($username, $user['username']);
+        $this->assertNotEquals($username, $user->username);
+        $this->assertEquals($usernameSlug, $user->getAttribute('username'));
+        $this->assertEquals($usernameSlug, $user['username']);
+        $this->assertEquals($usernameSlug, $user->username);
+    }
+
     public function testMultipleLevelDotNotation(): void
     {
         /** @var Book $book */
@@ -749,5 +767,24 @@ class ModelTest extends TestCase
         $dataValues = ['array', 'of', 'values'];
         $model->fill(['level1' => $dataValues]);
         $this->assertEquals($dataValues, $model->getAttribute('level1'));
+    }
+
+    public function testFirstOrCreate(): void
+    {
+        $name = 'Jane Poe';
+
+        /** @var User $user */
+        $user = User::where('name', $name)->first();
+        $this->assertNull($user);
+
+        /** @var User $user */
+        $user = User::firstOrCreate(compact('name'));
+        $this->assertInstanceOf(Model::class, $user);
+        $this->assertTrue($user->exists);
+        $this->assertEquals($name, $user->name);
+
+        /** @var User $check */
+        $check = User::where('name', $name)->first();
+        $this->assertEquals($user->_id, $check->_id);
     }
 }
